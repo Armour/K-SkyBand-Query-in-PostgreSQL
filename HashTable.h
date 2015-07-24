@@ -29,6 +29,8 @@ struct HashTable {
 struct HashTable *InitializeTable(int TableSize);
 struct ListNode *Find(char *bitmap, struct HashTable *H, int dataDimension);
 void Insert(char *bitmap, struct HashTable *H, int dataDimension, struct gtBucket* bucket, struct gtBucket** firstBucket, struct gtBucket** lastBucket);
+int NextPrime(int size);
 int sameBitmap(char *A, char* B, int dataDimension);
+unsigned int BKDRHash(char *str, int M, int dataDimension);
 
 #endif

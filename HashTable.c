@@ -50,41 +50,41 @@ int NextPrime(int size) {
 }
 
 // BKDR Hash Function
-unsigned int Hash(char *str, int M, int dataDimension) {
+unsigned int BKDRHash(char *str, int M, int dataDimension) {
     unsigned int seed = 131 ; // 31 131 1313 13131 131313 etc..
-    unsigned int hash = 0 ;
+    unsigned int hashValue = 0 ;
     int i = 0;
     while (i < dataDimension) {
-        hash = hash * seed + *(str + i);
+        hashValue = hashValue * seed + *(str + i);
         i++;
+        if (hashValue >= M)
+            hashValue %= M;
     }
-    return(hash % M);
+    return(hashValue % M);
 }
 
 int sameBitmap(char *A, char* B, int dataDimension) {
     int i;
     for (i = 0; i < dataDimension; i++)
-        if (*(A + i) != *(B + i)) {
+        if (*(A + i) != *(B + i))
             return 0;
-        }
     return  1;
 }
 
 struct HashTable* InitializeTable(int TableSize) {
     struct HashTable* H;
     int i;
-    H = (struct HashTable *)malloc(sizeof(struct HashTable));  /* Allocate table */
-    //if (H == NULL)
-    //    FatalError( "Out of space!!!" );
+    H = (struct HashTable *)palloc(sizeof(struct HashTable));  /* Allocate table */
+    if (H == NULL)
+        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Cannot start a hash table.")));
     H->TableSize = NextPrime(TableSize);  /* Better be prime */
-    H->TheLists = (struct ListNode **)malloc(sizeof(struct ListNode *) * H->TableSize );  /*Array of lists*/
-    //if ( H->TheLists == NULL )
-    //    FatalError( "Out of space!!!" );
+    H->TheLists = (struct ListNode **)palloc(sizeof(struct ListNode *) * H->TableSize );  /*Array of lists*/
+    if (H->TheLists == NULL)
+        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Cannot start a hash table's lists.")));
     for( i = 0; i < H->TableSize; i++ ) {   /* Allocate list headers */
-        H->TheLists[i] = (struct ListNode *)malloc(sizeof(struct ListNode)); /* Slow! */
-        //if ( H->TheLists[i] == NULL )
-        //    FatalError( "Out of space!!!" );
-        //else
+        H->TheLists[i] = (struct ListNode *)palloc(sizeof(struct ListNode)); /* Slow! */
+        if (H->TheLists == NULL)
+            ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Cannot start a hash table's list node.")));
         H->TheLists[i]->Next = NULL;
     }
     return H;
@@ -93,7 +93,7 @@ struct HashTable* InitializeTable(int TableSize) {
 struct ListNode *Find(char *bitmap, struct HashTable *H, int dataDimension) {
     struct ListNode *P;
     struct ListNode *L;
-    L = H->TheLists[Hash(bitmap, H->TableSize, dataDimension)];
+    L = H->TheLists[BKDRHash(bitmap, H->TableSize, dataDimension)];
     P = L->Next;
     while (P != NULL && !sameBitmap(P->bitmap, bitmap, dataDimension))
         P = P->Next;
@@ -101,29 +101,24 @@ struct ListNode *Find(char *bitmap, struct HashTable *H, int dataDimension) {
 }
 
 void Insert(char *bitmap, struct HashTable *H, int dataDimension, struct gtBucket* bucket, struct gtBucket** firstBucket, struct gtBucket** lastBucket) {
-    struct ListNode *Pos, *NewCell;
+    struct ListNode *NewCell;
     struct ListNode *L;
     int i;
-    Pos = Find(bitmap, H, dataDimension);
-    if (Pos == NULL) {   /* Key is not found, then insert */
-        NewCell = (struct ListNode *)malloc(sizeof(struct ListNode));
-        NewCell->bitmap = (char *)malloc(sizeof(char) * dataDimension);
-        NewCell->bucket = bucket;
-        //if (NewCell == NULL)
-        //    FatalError( "Out of space!!!" );
-        //else {
-        L = H->TheLists[Hash(bitmap, H->TableSize, dataDimension)];
-        NewCell->Next = L->Next;
-        for (i = 0; i < dataDimension; i++)
-            *((NewCell->bitmap) + i) = *(bitmap + i);
-        L->Next = NewCell;
-        //}
-        if (*firstBucket == NULL) {
-            *firstBucket = NewCell->bucket;
-            *lastBucket = NewCell->bucket;
-        } else {
-            (*lastBucket)->next = NewCell->bucket;
-            *lastBucket = NewCell->bucket;
-        }
+    NewCell = (struct ListNode *)palloc(sizeof(struct ListNode));
+    NewCell->bitmap = (char *)palloc(sizeof(char) * dataDimension);
+    NewCell->bucket = bucket;
+    if (NewCell == NULL)
+        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Cannot start a insert.")));
+    L = H->TheLists[BKDRHash(bitmap, H->TableSize, dataDimension)];
+    NewCell->Next = L->Next;
+    for (i = 0; i < dataDimension; i++)
+        *((NewCell->bitmap) + i) = *(bitmap + i);
+    L->Next = NewCell;
+    if (*firstBucket == NULL) {
+        *firstBucket = NewCell->bucket;
+        *lastBucket = NewCell->bucket;
+    } else {
+        (*lastBucket)->next = NewCell->bucket;
+        *lastBucket = NewCell->bucket;
     }
 }

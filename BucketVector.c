@@ -58,7 +58,7 @@ void DeleteBucket(int Position, struct gtBucket **BucketHead, int *TotalSize) {
         else break;
     }
     if (i != Position)
-    	ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Illegal GetNode.")));
+        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Illegal GetNode.")));
     Pointer -> previous -> next = Pointer -> next;
     Pointer -> next = NULL;
     Pointer -> previous = NULL;

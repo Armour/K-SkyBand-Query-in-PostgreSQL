@@ -30,30 +30,27 @@ int kValue;
 int dataDimension;
 int dataCount;
 int *tmpInt;
+int tmpSize;
+int SSize, StwhSize, SesSize, SgSize;
 int32 **tmpIntStar;
-int *dominateBucket;
 
-struct HashTable *H;
-
-int tmpSize = 0;
-int SSize = 0; //Total data size.
-int StwhSize = 0, SesSize = 0, SgSize = 0;
 struct gtPoint *retPoint;
 struct gtPoint *tmpInput, *tmpHead, *tmpTail;
 struct gtPoint *S, *SHead, *STail;
 struct gtPoint *Stwh, *StwhHead, *StwhTail;
 struct gtPoint *Ses, *SesHead, *SesTail;
 struct gtPoint *Sg, *SgHead, *SgTail;
-struct gtBucket *tmpBucket = NULL;
-struct gtBucket *firstBucket = NULL, *lastBucket = NULL;
+struct gtBucket *tmpBucket;
+struct gtBucket *firstBucket, *lastBucket;
 struct ListNode *tmpListNode;
+struct HashTable *H;
 
 bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
     int32 x1, x2;
     int i;
     int dimension = p1->dimension;
     int smallCount = 0;
-    int atLeastOneSmall = 0;
+    bool atLeastOneSmall = false;
     bool x1IsNull, x2IsNull;
     if (!p1 || !p2) return 0;
     for (i = 0; i < dimension; i++) {
@@ -65,7 +62,7 @@ bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
             smallCount++;
         } else {
             if (x1 <= x2) smallCount++;
-            if (x1 < x2) atLeastOneSmall = 1;
+            if (x1 < x2) atLeastOneSmall = true;
         }
     }
     if ((smallCount == dimension) && atLeastOneSmall)
@@ -79,13 +76,13 @@ int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2) {
 }
 
 void thicknessWarehouse(int dataDimension, int kValue) {
-    int i, j, k;
-    int iterCount = 0, iterCountB;
+    int i, j;
+    int iterCount, iterCountB;
 
     struct gtPoint *iterA;
     struct gtPoint *iterB;
-    struct gtPoint *tmpPoint = NULL;
-    struct gtPoint *tmpPoint2 = NULL;
+    struct gtPoint *tmpPoint;
+    struct gtPoint *tmpPoint2;
     struct gtPoint *tmpPointNext;
     struct gtPoint **tmpPointArray;
 
@@ -127,17 +124,18 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     if (tmpPointArray == NULL)
         ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Step2: Cannot palloc PointArray for insert point into Sln")));
     while (tmpBucket != NULL) {
+        elog(INFO, "%d", tmpBucket == tmpBucket->next);
         tmpPoint = tmpBucket->data;
         tmpPointArray[0] = tmpPoint;
-        for (j = 1; j < tmpBucket->dataSize; j++) {
+        for (i = 1; i < tmpBucket->dataSize; i++) {
             tmpPoint = tmpPoint->next;
-            tmpPointArray[j] = tmpPoint;
+            tmpPointArray[i] = tmpPoint;
         }
-        for (j = 1; j < tmpBucket->dataSize; j++) {
-            tmpPoint = tmpPointArray[j];
-            for (k = 1; k < tmpBucket->dataSize; k++) {
-                tmpPoint2 = tmpPointArray[k];
-                if (j != k ) {
+        for (i = 1; i < tmpBucket->dataSize; i++) {
+            tmpPoint = tmpPointArray[i];
+            for (j = 1; j < tmpBucket->dataSize; j++) {
+                tmpPoint2 = tmpPointArray[j];
+                if (i != j ) {
                     if (isPoint1DominatePoint2(tmpPoint2, tmpPoint)) {
                         tmpPoint->domainatedCount++;
                         if (tmpPoint->domainatedCount >= kValue) {
@@ -147,14 +145,13 @@ void thicknessWarehouse(int dataDimension, int kValue) {
                     }
                 }
             }
-            if (k == tmpBucket->dataSize) // which means data[j] is not dominted more than k times, then put it into Sl.
+            if (j == tmpBucket->dataSize) // which means data[j] is not dominted more than k times, then put it into Sl.
                 PushPoint(tmpPoint, &StwhSize, &StwhTail);
-    }
+        }
         tmpBucket = tmpBucket->next;
     }
 
     pfree(tmpPointArray);
-
     elog(INFO, "Step2,3 over!!");
 
     // [STEP 4] Push Swth -> Ses
@@ -180,7 +177,6 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     //        }
     //    }
     // }
-
     iterCount = 0;
     iterA = Stwh->next;
     while (iterA != NULL) {
@@ -288,8 +284,16 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
     int max_calls;
 
     FuncCallContext *funcctx;
-    TupleDesc tupdesc;
     AttInMetadata *attinmeta;
+    TupleDesc tupdesc;
+
+    tmpSize = 0;
+    SSize = 0;
+    StwhSize = 0;
+    SesSize = 0;
+    SgSize = 0;
+    firstBucket = NULL;
+    lastBucket = NULL;
 
     /* stuff done only on the first call of the function */
     if (SRF_IS_FIRSTCALL()) {
@@ -327,8 +331,7 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
 
             tupdesc = SPI_tuptable->tupdesc;
             tuptable = SPI_tuptable;
-
-            dataDimension = tupdesc->natts; // attribute number
+            dataDimension = tupdesc->natts; // dimension
 
             S = StartPoint(S, &SSize, &SHead, &STail, dataDimension);
             tmpIntStar = (int32 **)palloc(sizeof(int32*) * dataCount);
@@ -343,6 +346,7 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
 
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {
                     if (SPI_getvalue(tuple, tupdesc, j) == NULL)
+
                         *(*(tmpInput->data) + j - 1) = 0;
                     else
                         *(*(tmpInput->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j));
@@ -354,9 +358,9 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {
                     bitValid = atoi((SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1");
                     if (bitValid != 1)
-                        *(tmpInput->bitmap + j) = '0';
+                        *(tmpInput->bitmap + j - 1) = '0';
                     else
-                        *(tmpInput->bitmap + j) = '1';
+                        *(tmpInput->bitmap + j - 1) = '1';
                     snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
                             (SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1", (j == tupdesc->natts) ? " " : " |");
                 }
@@ -430,7 +434,7 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
         elog(INFO, "SRF palloc each values over ~~~~!!");
 
         for (i = 0; i < dataDimension; i++) {
-            if (!(retPoint->bitmap & two[dataDimension - i]))
+            if (*(retPoint->bitmap + i) == '0')
                 values[i] = NULL;
             else
                 snprintf(values[i], 16, "%d", *(*(retPoint->data) + i));
@@ -450,7 +454,7 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
         elog(INFO, "SRF to datum over ~~~~!!");
 
         SRF_RETURN_NEXT(funcctx, result);
-    } else {   /* do when there is no more left */
-        SRF_RETURN_DONE(funcctx);
+    } else {
+        SRF_RETURN_DONE(funcctx);    // if all printed
     }
 }
