@@ -1,5 +1,5 @@
 //
-//  main.cpp
+//  skyline.c
 //  KeySkyBandQuery
 //
 //  Created by Armour on 7/10/15.
@@ -14,6 +14,7 @@
 #include "utils/builtins.h"
 #include "PointVector.h"
 #include "BucketVector.h"
+#include "HashTable.h"
 
 PG_MODULE_MAGIC;
 
@@ -25,7 +26,6 @@ bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2);
 int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2);
 void thicknessWarehouse(int dataDimension, int kValue);
 
-int two[29];
 int kValue;
 int dataDimension;
 int dataCount;
@@ -33,18 +33,20 @@ int *tmpInt;
 int32 **tmpIntStar;
 int *dominateBucket;
 
+struct HashTable *H;
+
 int tmpSize = 0;
 int SSize = 0; //Total data size.
 int StwhSize = 0, SesSize = 0, SgSize = 0;
-int bucketSize = 0;
 struct gtPoint *retPoint;
 struct gtPoint *tmpInput, *tmpHead, *tmpTail;
 struct gtPoint *S, *SHead, *STail;
 struct gtPoint *Stwh, *StwhHead, *StwhTail;
 struct gtPoint *Ses, *SesHead, *SesTail;
 struct gtPoint *Sg, *SgHead, *SgTail;
-struct gtBucket *bucket;
-struct gtBucket *bucketHead, *bucketTail;
+struct gtBucket *tmpBucket = NULL;
+struct gtBucket *firstBucket = NULL, *lastBucket = NULL;
+struct ListNode *tmpListNode;
 
 bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
     int32 x1, x2;
@@ -57,8 +59,8 @@ bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
     for (i = 0; i < dimension; i++) {
         x1 = *(*(p1->data)+i);
         x2 = *(*(p2->data)+i);
-        x1IsNull = !(p1->bitmap & two[dimension - i]);
-        x2IsNull = !(p2->bitmap & two[dimension - i]);
+        x1IsNull = (*(p1->bitmap + i)) == '0';
+        x2IsNull = (*(p2->bitmap + i)) == '0';
         if (x1IsNull || x2IsNull) {
             smallCount++;
         } else {
@@ -66,10 +68,10 @@ bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
             if (x1 < x2) atLeastOneSmall = 1;
         }
     }
-    if ((smallCount == dimension) && atLeastOneSmall) 
-	return 1;
-    else 
-	return 0;
+    if ((smallCount == dimension) && atLeastOneSmall)
+        return 1;
+    else
+        return 0;
 }
 
 int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2) {
@@ -78,7 +80,6 @@ int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2) {
 
 void thicknessWarehouse(int dataDimension, int kValue) {
     int i, j, k;
-    int bucketCount = 1;
     int iterCount = 0, iterCountB;
 
     struct gtPoint *iterA;
@@ -87,27 +88,16 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     struct gtPoint *tmpPoint2 = NULL;
     struct gtPoint *tmpPointNext;
     struct gtPoint **tmpPointArray;
-    struct gtBucket *tmpBucket = NULL;    
 
     Stwh = StartPoint(Stwh, &StwhSize, &StwhHead, &StwhTail, dataDimension);
     Ses = StartPoint(Ses, &SesSize, &SesHead, &SesTail, dataDimension);
     Sg = StartPoint(Sg, &SgSize, &SgHead, &SgTail, dataDimension);
 
     // [STEP 1] Push all points in S to every bucket according to bitmap
-    for (i = 0; i < dataDimension; i++)
-        bucketCount *= 2;   // !!!!!! Dimension should not larger then 30 !!!!!!!!
 
     ////////////////////////////////////////////////////
     // Origin: bucket = new gtBucket[bucketCount];
-    bucket = StartBucket(bucket, &bucketSize, &bucketHead, &bucketTail, dataDimension); 
-
-    for (i = 0; i < bucketCount; i++) {
-        tmpBucket = (struct gtBucket *)palloc(sizeof(struct gtBucket));  // 1 bucket + 3 point => 232 bytes
-    	if (tmpBucket == NULL)
-    	    ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Step1: Cannot palloc bucket")));
-        InitBucket(tmpBucket, dataDimension);
-        PushBucket(tmpBucket, &bucketSize, &bucketTail);
-    }
+    H = InitializeTable(dataCount);
     ////////////////////////////////////////////////////
 
     ////////////////////////////////////////////////////
@@ -117,7 +107,14 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     while (tmpPointNext != NULL) {
         tmpPoint = tmpPointNext;
         tmpPointNext = tmpPoint->next;
-        tmpBucket = GetBucket(tmpPoint->bitmap, bucketHead); // !! how to save time, there should be a trade off between time and space
+        tmpListNode = Find(tmpPoint->bitmap, H, dataDimension);
+        if (tmpListNode == NULL) {
+            tmpBucket = (struct gtBucket *)palloc(sizeof(struct gtBucket));
+            InitBucket(tmpBucket, dataDimension);
+            Insert(tmpPoint->bitmap, H, dataDimension, tmpBucket, &firstBucket, &lastBucket);
+        } else {
+            tmpBucket = tmpListNode->bucket;
+        }
         PushPoint(tmpPoint, &tmpBucket->dataSize, &tmpBucket->dataTail);
     }
     ////////////////////////////////////////////////////
@@ -125,12 +122,11 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     elog(INFO, "Step1 over!!");
 
     // [STEP 2] Divide points in every bucket into Sl and Sln
-    tmpBucket = bucket;
+    tmpBucket = firstBucket;
     tmpPointArray = (struct gtPoint **)palloc(sizeof(struct gtPoint*) * tmpBucket->dataSize);
     if (tmpPointArray == NULL)
         ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Step2: Cannot palloc PointArray for insert point into Sln")));
-    for (i = 0; i < bucketCount; i++) {
-        tmpBucket->bitmap = i;
+    while (tmpBucket != NULL) {
         tmpPoint = tmpBucket->data;
         tmpPointArray[0] = tmpPoint;
         for (j = 1; j < tmpBucket->dataSize; j++) {
@@ -150,20 +146,19 @@ void thicknessWarehouse(int dataDimension, int kValue) {
                         }
                     }
                 }
-			}
+            }
             if (k == tmpBucket->dataSize) // which means data[j] is not dominted more than k times, then put it into Sl.
                 PushPoint(tmpPoint, &StwhSize, &StwhTail);
-	}
+    }
         tmpBucket = tmpBucket->next;
     }
 
     pfree(tmpPointArray);
-    
+
     elog(INFO, "Step2,3 over!!");
 
     // [STEP 4] Push Swth -> Ses
     // std::sort(Stwh.begin(), Stwh.end(), gtSortAlgo);
-
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Origin:
@@ -196,7 +191,7 @@ void thicknessWarehouse(int dataDimension, int kValue) {
         while (iterB != StwhHead) {
             iterCountB++;
             tmpPoint = iterB->previous;
-            if (iterA->bitmap == iterB->bitmap ) {
+            if (sameBitmap(iterA->bitmap, iterB->bitmap, dataDimension)) {
                 iterB = tmpPoint;
                 continue;
             }
@@ -226,7 +221,7 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     /////////////////////////////////////////////////////////////////////////////////////
 
     elog(INFO, "Step4 over!!");
-    
+
     //[STEP 5] (Stwh, Ses) -> Sg
 
     // Stwh VS Ses
@@ -258,8 +253,8 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     while (iterA != NULL) {
         iterCount++;
         tmpPointNext = iterA->next;
-        tmpBucket = bucket;
-        for (i = 0; i < bucketCount; i++) {
+        tmpBucket = firstBucket;
+        while (tmpBucket != NULL) {
             iterB = tmpBucket->Sln->next;
             while (iterB != NULL) {
                 if (isPoint1DominatePoint2(iterB, iterA)) {
@@ -274,9 +269,9 @@ void thicknessWarehouse(int dataDimension, int kValue) {
             }
             if (iterB != NULL) break;
             tmpBucket = tmpBucket->next;
-		}
-		iterA = tmpPointNext;
-	}
+        }
+        iterA = tmpPointNext;
+    }
 
     SgSize = StwhSize;
     SgHead = StwhHead;
@@ -287,18 +282,18 @@ void thicknessWarehouse(int dataDimension, int kValue) {
 Datum skyline_in(PG_FUNCTION_ARGS) {
     char *command;
     int ret;
-    int i, j;   
+    int i, j;
     int bitValid;
+    int call_cntr;
+    int max_calls;
 
-    FuncCallContext     *funcctx;
-    int                  call_cntr;
-    int                  max_calls;
-    TupleDesc            tupdesc;
-    AttInMetadata       *attinmeta;
+    FuncCallContext *funcctx;
+    TupleDesc tupdesc;
+    AttInMetadata *attinmeta;
 
     /* stuff done only on the first call of the function */
     if (SRF_IS_FIRSTCALL()) {
-        MemoryContext   oldcontext;
+        MemoryContext oldcontext;
 
         /* create a function context for cross-call persistence */
         funcctx = SRF_FIRSTCALL_INIT();
@@ -306,17 +301,9 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
         /* switch to memory context appropriate for multiple function calls */
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-	/////////////////////////////////////////////////////////////////////////////
-	// user code here
-	/////////////////////////////////////////////////////////////////////////////
- 
-        two[0] = 0;
-        two[1] = 1;
-        for (i = 2; i < 29; i++) {
-            two[i] = two[i-1] * 2;
-	    elog(INFO, "%d ", two[i]);
-        }
-	elog(INFO, "\n");
+        /////////////////////////////////////////////////////////////////////////////
+        // user code here
+        /////////////////////////////////////////////////////////////////////////////
 
         /* get arguments, convert given text object to a C string */
         command = text_to_cstring(PG_GETARG_TEXT_P(0));
@@ -333,74 +320,71 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
 
         /* If some rows were fetched, print them via elog(INFO). */
         if (ret > 0 && SPI_tuptable != NULL) {
-	    TupleDesc tupdesc;
-	    SPITupleTable *tuptable;
-	    HeapTuple tuple;
+            TupleDesc tupdesc;
+            SPITupleTable *tuptable;
+            HeapTuple tuple;
             char buf[8192];
 
             tupdesc = SPI_tuptable->tupdesc;
             tuptable = SPI_tuptable;
 
-	    dataDimension = tupdesc->natts; // attribute number
-    
-    	    S = StartPoint(S, &SSize, &SHead, &STail, dataDimension);
-    	    tmpIntStar = (int32 **)palloc(sizeof(int32*) * dataCount);
+            dataDimension = tupdesc->natts; // attribute number
+
+            S = StartPoint(S, &SSize, &SHead, &STail, dataDimension);
+            tmpIntStar = (int32 **)palloc(sizeof(int32*) * dataCount);
 
             for (i = 0; i < dataCount; i++) {
-    	        tmpInput = StartPoint(tmpInput, &tmpSize, &tmpHead, &tmpTail, dataDimension);
-    	        tmpIntStar[i] = (int32 *)palloc(sizeof(int32) * dataDimension);
-    	        tmpInput->data = &(tmpIntStar[i]);
+                tmpInput = StartPoint(tmpInput, &tmpSize, &tmpHead, &tmpTail, dataDimension);
+                tmpIntStar[i] = (int32 *)palloc(sizeof(int32) * dataDimension);
+                tmpInput->data = &(tmpIntStar[i]);
+                tmpInput->bitmap = (char *)palloc(sizeof(char) * dataDimension);
+
                 tuple = tuptable->vals[i];
 
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {
-		    if (SPI_getvalue(tuple, tupdesc, j) == NULL) 
-		        *(*(tmpInput->data) + j - 1) = 0;
-		    else 
-		        *(*(tmpInput->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j)); 
-                        snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                            SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
-	        }
-                elog(INFO, "Data Info: %s", buf);
+                    if (SPI_getvalue(tuple, tupdesc, j) == NULL)
+                        *(*(tmpInput->data) + j - 1) = 0;
+                    else
+                        *(*(tmpInput->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j));
+                                snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
+                                    SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
+                    }
+                    elog(INFO, "Data Info: %s", buf);
 
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {
-		    bitValid = atoi((SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1");
-    	            if (bitValid != 1)  {
-    	                tmpInput->bitmap <<= 1;
-    	            } else {
-    	                tmpInput->bitmap <<= 1;
-    	                tmpInput->bitmap |= 1;
-    	            }
+                    bitValid = atoi((SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1");
+                    if (bitValid != 1)
+                        *(tmpInput->bitmap + j) = '0';
+                    else
+                        *(tmpInput->bitmap + j) = '1';
                     snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
                             (SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1", (j == tupdesc->natts) ? " " : " |");
-    	        }
+                }
                 elog(INFO, "Bitmap   : %s", buf);
-	
-    	    	PushPoint(tmpInput, &SSize, &STail);        // Push point to S       
-	    }
 
-    	}
+                PushPoint(tmpInput, &SSize, &STail);        // Push point to S
+            }
+        }
 
         elog(INFO, "Input over!!");
 
-    	SPI_finish();
+        SPI_finish();
+        pfree(command);
 
         elog(INFO, "SPI over!!");
 
-    	pfree(command);
-        elog(INFO, "Cmd Free over!!");
-
-    	kValue = 1;
-    	thicknessWarehouse(dataDimension, kValue);
+        kValue = 1;
+        thicknessWarehouse(dataDimension, kValue);
 
         elog(INFO, "TWH over!!");
 
-	/////////////////////////////////////////////////////////////////////////////
-	// end of user code 
-	/////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////
+        // end of user code
+        /////////////////////////////////////////////////////////////////////////////
 
         /* total number of tuples to be returned */
         funcctx->max_calls = SgSize - 1;
-	retPoint = Sg->next;
+        retPoint = Sg->next;
 
         /* Build a tuple descriptor for our result type */
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
@@ -422,7 +406,7 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
     call_cntr = funcctx->call_cntr;
     max_calls = funcctx->max_calls;
     attinmeta = funcctx->attinmeta;
-    
+
     elog(INFO, "SRF begin!!");
 
     if (call_cntr < max_calls) {   /* do when there is more left to send */
@@ -438,39 +422,32 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
          */
         values = (char **) palloc(dataDimension * sizeof(char *));
 
-	elog(INFO, "SRF palloc values over ~~~~!!");
+        elog(INFO, "SRF palloc values over ~~~~!!");
 
-	for (i = 0; i < dataDimension; i++) {
-	    values[i] = (char *) palloc(16 * sizeof(char));	
-	}
-        //values[0] = (char *) palloc(16 * sizeof(char));
-        //values[1] = (char *) palloc(16 * sizeof(char));
-        //values[2] = (char *) palloc(16 * sizeof(char));
-        
-	elog(INFO, "SRF palloc each values over ~~~~!!");
-	
-	for (i = 0; i < dataDimension; i++) {
-	    if (!(retPoint->bitmap & two[dataDimension - i])) 
-	        values[i] = NULL;
-	    else 
+        for (i = 0; i < dataDimension; i++)
+            values[i] = (char *) palloc(16 * sizeof(char));
+
+        elog(INFO, "SRF palloc each values over ~~~~!!");
+
+        for (i = 0; i < dataDimension; i++) {
+            if (!(retPoint->bitmap & two[dataDimension - i]))
+                values[i] = NULL;
+            else
                 snprintf(values[i], 16, "%d", *(*(retPoint->data) + i));
-	}
-        //snprintf(values[0], 16, "%d", *(*(retPoint->data) + 0));
-        //snprintf(values[1], 16, "%d", *(*(retPoint->data) + 1));
-        //snprintf(values[2], 16, "%d", *(*(retPoint->data) + 2));
-	retPoint = retPoint->next;
+        }
+        retPoint = retPoint->next;
 
-	elog(INFO, "SRF set value over ~~~~!!");
+        elog(INFO, "SRF set value over ~~~~!!");
 
         /* build a tuple */
         tuple = BuildTupleFromCStrings(attinmeta, values);
 
-	elog(INFO, "SRF buil tuple over ~~~~!!");
+        elog(INFO, "SRF buil tuple over ~~~~!!");
 
         /* make the tuple into a datum */
         result = HeapTupleGetDatum(tuple);
 
-	elog(INFO, "SRF to datum over ~~~~!!");
+        elog(INFO, "SRF to datum over ~~~~!!");
 
         SRF_RETURN_NEXT(funcctx, result);
     } else {   /* do when there is no more left */

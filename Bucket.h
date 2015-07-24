@@ -12,7 +12,6 @@
 #include "Point.h"
 
 struct gtBucket {
-    int bitmap;
     int dataSize;
     int SlSize;
     int SlnSize;
@@ -22,10 +21,6 @@ struct gtBucket {
     struct gtPoint *SlTail;
     struct gtPoint *Sln;
     struct gtPoint *SlnTail;
-    struct gtPoint *Stwh;
-    struct gtPoint *StwhTail;
-    struct gtPoint *Ses;
-    struct gtPoint *SesTail;
     struct gtBucket *next;
     struct gtBucket *previous;
 };

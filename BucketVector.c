@@ -3,14 +3,11 @@
 #include "BucketVector.h"
 
 void InitBucket(struct gtBucket *Bucket, int Dimension) {
-    Bucket -> bitmap = 0;
     Bucket -> dataSize = 0;
     Bucket -> dataTail = NULL;
     Bucket -> data = StartPoint(Bucket->data, &Bucket->dataSize, &Bucket->data, &Bucket->dataTail, Dimension);
     Bucket -> Sl = StartPoint(Bucket->Sl, &Bucket->SlSize, &Bucket->Sl, &Bucket->SlTail, Dimension);
     Bucket -> Sln = StartPoint(Bucket->Sln, &Bucket->SlnSize, &Bucket->Sln, &Bucket->SlnTail, Dimension);;
-    Bucket -> Stwh = NULL;
-    Bucket -> Ses = NULL;
     Bucket -> next = NULL;
     Bucket -> previous = NULL;
 }

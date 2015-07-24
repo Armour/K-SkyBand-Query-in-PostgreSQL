@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION skyline(text, int) 
-	RETURNS SETOF record
-	AS 'MODULE_PATHNAME', 'skyline_in'
-	LANGUAGE C STRICT;
+CREATE OR REPLACE FUNCTION skyline(text, int)
+    RETURNS SETOF record
+    AS 'MODULE_PATHNAME', 'skyline_in'
+    LANGUAGE C STRICT;

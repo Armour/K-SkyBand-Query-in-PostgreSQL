@@ -4,7 +4,7 @@
 void InitPoint(struct gtPoint *Node) {
     Node -> dimension = 0;
     Node -> data = NULL;
-    Node -> bitmap = 0;
+    Node -> bitmap = NULL;
     Node -> domainatedCount = 0;
     Node -> next = NULL;
     Node -> previous = NULL;
