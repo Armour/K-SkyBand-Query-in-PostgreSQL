@@ -23,7 +23,8 @@ PG_FUNCTION_INFO_V1(skyline_in);
 Datum skyline_in(PG_FUNCTION_ARGS);
 
 bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2);
-int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2);
+int cmpFunc(const void *v1, const void *v2);
+void QsortStwh(int size);
 void thicknessWarehouse(int dataDimension, int kValue);
 
 int kValue;
@@ -71,8 +72,34 @@ bool isPoint1DominatePoint2(struct gtPoint *p1, struct gtPoint *p2) {
         return 0;
 }
 
-int gtSortAlgo(const struct gtPoint *v1, const struct gtPoint *v2) {
-    return v1->domainatedCount > v2->domainatedCount;
+int cmpFunc(const void *v1, const void *v2) {
+    const struct gtPoint **t1 = (const struct gtPoint **)v1;
+    const struct gtPoint **t2 = (const struct gtPoint **)v2;
+    return (**t2).domainatedCount - (**t1).domainatedCount;
+}
+
+void QsortStwh(int size) {
+    int i;
+    struct gtPoint *pointArray[size];
+    struct gtPoint * tmpP;
+    if (kValue > 1) {
+        tmpP = StwhHead;
+        for (i = 0; i < size; i++) {
+            pointArray[i] = tmpP->next;
+            tmpP = tmpP->next;
+        }
+        qsort(pointArray, size, sizeof(pointArray[0]), cmpFunc);
+        StwhHead->next = pointArray[0];
+        pointArray[0]->previous = StwhHead;
+        pointArray[0]->next = NULL;
+        StwhTail = pointArray[0];
+        for (i = 1; i < size; i++) {
+            StwhTail->next = pointArray[i];
+            pointArray[i]->previous = StwhTail;
+            pointArray[i]->next = NULL;
+            StwhTail = pointArray[i];
+        }
+    }
 }
 
 void thicknessWarehouse(int dataDimension, int kValue) {
@@ -155,7 +182,8 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     elog(INFO, "Step2,3 over!!");
 
     // [STEP 4] Push Swth -> Ses
-    // std::sort(Stwh.begin(), Stwh.end(), gtSortAlgo);
+    // sort stwh bucket
+    QsortStwh(StwhSize - 1);
 
     /////////////////////////////////////////////////////////////////////////////////////
     // Origin:
@@ -187,10 +215,8 @@ void thicknessWarehouse(int dataDimension, int kValue) {
         while (iterB != StwhHead) {
             iterCountB++;
             tmpPoint = iterB->previous;
-            if (sameBitmap(iterA->bitmap, iterB->bitmap, dataDimension)) {
-                iterB = tmpPoint;
-                continue;
-            }
+            if (sameBitmap(iterA->bitmap, iterB->bitmap, dataDimension))
+                break;
             if (isPoint1DominatePoint2(iterB, iterA)) {
                 iterA->domainatedCount++;
                 if (iterA->domainatedCount >= kValue) {

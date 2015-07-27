@@ -57,17 +57,19 @@ void DeletePoint(int Position, struct gtPoint **PointHead, int *TotalSize, struc
         else
             break;
     }
-    if (Pointer -> next == NULL) {      // if delete the last node
-        *PointTail = (*PointTail)->previous;
+    if (Pointer -> previous != NULL) {  // if not the first node
+        if (Pointer -> next == NULL)      // if delete the last node
+            *PointTail = (*PointTail)->previous;
+        if (i != Position)
+            ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Illegal GetNode.")));
+        if (Pointer -> previous != NULL)
+            Pointer -> previous -> next = Pointer -> next;
+        if (Pointer -> next != NULL)
+            Pointer -> next -> previous = Pointer -> previous;
+        Pointer -> next = NULL;
+        Pointer -> previous = NULL;
+        *TotalSize = *TotalSize - 1;
     }
-    if (i != Position)
-        ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Illegal GetNode.")));
-    Pointer -> previous -> next = Pointer -> next;
-    if (Pointer -> next != NULL)
-        Pointer -> next -> previous = Pointer -> previous;
-    Pointer -> next = NULL;
-    Pointer -> previous = NULL;
-    *TotalSize = *TotalSize - 1;
 }
 
 void FreeAllPoints(struct gtPoint *Node, int *TotalSize) {
