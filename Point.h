@@ -9,6 +9,9 @@
 #ifndef gtKeySkyBandQueryPlus_Point_h
 #define gtKeySkyBandQueryPlus_Point_h
 
+#include "postgres.h"
+#include "fmgr.h"
+
 struct gtPoint {
     int dimension;            // point dimension
     int32 **data;

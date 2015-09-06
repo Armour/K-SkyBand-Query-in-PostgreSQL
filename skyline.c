@@ -31,9 +31,9 @@ int kValue;
 int dataDimension;
 int dataCount;
 int *tmpInt;
+int32 **tmpIntStar;
 int tmpSize;
 int SSize, StwhSize, SesSize, SgSize;
-int32 **tmpIntStar;
 
 struct gtPoint *retPoint;
 struct gtPoint *tmpInput, *tmpHead, *tmpTail;
@@ -151,7 +151,6 @@ void thicknessWarehouse(int dataDimension, int kValue) {
     if (tmpPointArray == NULL)
         ereport(ERROR, (errcode(ERRCODE_OUT_OF_MEMORY), errmsg("Step2: Cannot palloc PointArray for insert point into Sln")));
     while (tmpBucket != NULL) {
-        elog(INFO, "%d", tmpBucket == tmpBucket->next);
         tmpPoint = tmpBucket->data;
         tmpPointArray[0] = tmpPoint;
         for (i = 1; i < tmpBucket->dataSize; i++) {
@@ -372,7 +371,6 @@ Datum skyline_in(PG_FUNCTION_ARGS) {
 
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {
                     if (SPI_getvalue(tuple, tupdesc, j) == NULL)
-
                         *(*(tmpInput->data) + j - 1) = 0;
                     else
                         *(*(tmpInput->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j));
