@@ -1,11 +1,11 @@
-MODULE_big = skyline
-OBJS = skyline.o BucketVector.o PointVector.o HashTable.o
-DATA_built = skyline.sql
+MODULE_big = skyband
+OBJS = skyband.o sky_bucket_list.o sky_point_list.o sky_hashtable.o
+DATA_built = skyband.sql
 
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
 
-BucketVector.o: BucketVector.c BucketVector.h
-PointVector.o: PointVector.c PointVector.h
-HashTable.o: HashTable.c HashTable.h
+sky_bucket_list.o: sky_bucket_list.c sky_bucket_list.h
+sky_point_list.o: sky_point_list.c sky_point_list.h
+sky_hashtable.o: sky_hashtable.c sky_hashtable.h

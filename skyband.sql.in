@@ -1,0 +1,4 @@
+CREATE OR REPLACE FUNCTION skyband(text, int)
+    RETURNS SETOF record
+    AS 'MODULE_PATHNAME', 'SkybandQuery'
+    LANGUAGE C STRICT;
