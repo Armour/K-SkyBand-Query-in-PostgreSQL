@@ -403,7 +403,6 @@ void Init(void) {
  *
  *     returns: Datum
  */
-
 Datum SkybandQuery(PG_FUNCTION_ARGS) {
     char *command;
     int ret;
@@ -431,6 +430,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
     /* stuff done only on the first call of the function */
     if (SRF_IS_FIRSTCALL()) {
+        elog(INFO, "!!!! First!!!!");
         MemoryContext oldcontext;
 
         /* create a function context for cross-call persistence */
@@ -441,7 +441,11 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
         /* get arguments, convert given text object to a C string */
         command = text_to_cstring(PG_GETARG_TEXT_P(0));
-        sky_k = PG_GETARG_INT32(1);
+        if (!PG_ARGISNULL(1)) {
+            sky_k = PG_GETARG_INT32(1);
+        } else {
+            sky_k = 1;
+        }
 
         /* open internal connection */
         SPI_connect();
@@ -480,9 +484,9 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
                         *(*(tmp_head->data) + j - 1) = 0;
                     else
                         *(*(tmp_head->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j));
-                                snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                                    SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
-                    }
+                    snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
+                            SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
+                }
                 elog(INFO, "Data Info: %s", buf);
 
                 for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {                     /* Input point's bitmap from tuple */
@@ -513,7 +517,9 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
         /* total number of tuples to be returned */
         funcctx->max_calls = sg_size - 1;
-        ret_point = sg_head->next;
+        funcctx->user_fctx = (SkyPoint *)palloc(sizeof(SkyPoint));
+        funcctx->user_fctx = sg_head->next;
+        //ret_point = sg_head->next;
 
         /* Build a tuple descriptor for our result type */
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
@@ -536,6 +542,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     call_cntr = funcctx->call_cntr;
     max_calls = funcctx->max_calls;
     attinmeta = funcctx->attinmeta;
+    ret_point = funcctx->user_fctx;
 
     elog(INFO, "SRF begin!!");
 
@@ -561,8 +568,8 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
         elog(INFO, "This: %d", *(*(ret_point)->data));
         elog(INFO, "This: %d", *(*(ret_point)->data + 1));
-        elog(INFO, "Next: %d", *(*(ret_point->next)->data));
-        elog(INFO, "Next: %d", *(*(ret_point->next)->data + 1));
+        //elog(INFO, "Next: %d", *(*(ret_point->next)->data));
+        //elog(INFO, "Next: %d", *(*(ret_point->next)->data + 1));
 
         for (i = 0; i < sky_dim; i++) {
             if (*(ret_point->bitmap + i) == '0')
@@ -590,4 +597,5 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     } else {
         SRF_RETURN_DONE(funcctx);    // if all printed
     }
+
 }
