@@ -54,13 +54,17 @@ SkyPoint *stwh_head, *stwh_tail;        /* Head/tail point for Stwh */
 SkyPoint *ses_head, *ses_tail;          /* Head/tail point for Ses */
 SkyPoint *sg_head, *sg_tail;            /* Head/tail point for Sg */
 SkyPoint *tmp_head, *tmp_tail;
-SkyPoint *ret_point;                    /* Used for return point in query */
 
 SkyBucket *first_bucket, *last_bucket;         /* First and last bucket for all bitmap that already knows */
 SkyBucket *tmp_bucket;
 
 HashTable *h;                           /* Hashtable for skyband query */
 ListNode *tmp_listnode;
+
+typedef struct ret_struct {
+    SkyPoint **point;
+    int32 **data_pointer;
+} ret_struct;
 
 /*
  * Function: IsP1DominateP2
@@ -216,9 +220,7 @@ void ThicknessWarehouse(void) {
         PushPoint(tmp_point, &tmp_bucket->data_size, &tmp_bucket->data_tail);       /* Push point into the bucket of this bitmap */
     }
 
-    //elog(INFO, "Step1 over!!");
-
-     //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
     //                                                                      //
     // [STEP 2]                                                             //
     //      Divide points in every bucket into Sl and Sln, then put all     //
@@ -257,9 +259,7 @@ void ThicknessWarehouse(void) {
         pfree(tmp_array);
     }
 
-    //elog(INFO, "Step2 over!!");
-
-   //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
     //                                                                      //
     // [STEP 3]                                                             //
     //      Quick sort all points in Stwh according to cnt_domi             //
@@ -267,8 +267,6 @@ void ThicknessWarehouse(void) {
     //////////////////////////////////////////////////////////////////////////
 
     QsortStwh(stwh_size);
-
-    //elog(INFO, "Step3 over!!");
 
     //////////////////////////////////////////////////////////////////////////
     //                                                                      //
@@ -312,8 +310,6 @@ void ThicknessWarehouse(void) {
         }
         iter_a = tmp_next;
     }
-
-    //elog(INFO, "Step4 over!!");
 
     //////////////////////////////////////////////////////////////////////////
     //                                                                      //
@@ -370,8 +366,6 @@ void ThicknessWarehouse(void) {
         iter_a = tmp_next;
     }
 
-    //elog(INFO, "Step5 over!!");
-
     /* Sg is equal to Stwh now, and it is the answer of the query */
     sg_size = stwh_size;
     sg_head = stwh_head;
@@ -403,6 +397,7 @@ void Init(void) {
  *
  *     returns: Datum
  */
+
 Datum SkybandQuery(PG_FUNCTION_ARGS) {
     char *command;
     int ret;
@@ -410,27 +405,18 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     int bitmap;
     int call_cntr;
     int max_calls;
+    SkyPoint *tmp_point;
+    ret_struct *ret_points;
 
     FuncCallContext *funcctx;
     AttInMetadata *attinmeta;
     TupleDesc tupdesc;
 
     /* Initialize varible */
-    //Init();
-
-    tmp_size = 0;
-    s_size = 0;
-    stwh_size = 0;
-    ses_size = 0;
-    sg_size = 0;
-    first_bucket = NULL;
-    last_bucket = NULL;
-
-    elog(INFO, "!!!!");
+    Init();
 
     /* stuff done only on the first call of the function */
     if (SRF_IS_FIRSTCALL()) {
-        elog(INFO, "!!!! First!!!!");
         MemoryContext oldcontext;
 
         /* create a function context for cross-call persistence */
@@ -516,10 +502,25 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
         elog(INFO, "TWH over!!");
 
         /* total number of tuples to be returned */
-        funcctx->max_calls = sg_size - 1;
-        funcctx->user_fctx = (SkyPoint *)palloc(sizeof(SkyPoint));
-        funcctx->user_fctx = sg_head->next;
-        //ret_point = sg_head->next;
+        funcctx->max_calls = sg_size;
+
+        /* store all output informatin to funcctx->user_fctx */
+        ret_points = (ret_struct *)palloc(sizeof(ret_struct));
+        ret_points->point = (SkyPoint **)palloc(sizeof(SkyPoint*) * sg_size);           /* store points */
+        ret_points->data_pointer = (int32 **)palloc(sizeof(int32*) * sg_size);          /* store data and then can pass this address to ret_points->point->data */
+        tmp_point = sg_head;
+        for (i = 0; i < sg_size; ++i) {
+            tmp_point = tmp_point->next;
+            *((ret_points->point) + i) = (SkyPoint *)palloc(sizeof(SkyPoint));
+            (*((ret_points->point) + i))->bitmap = (char *)palloc(sizeof(char) * sky_dim);      /* palloc bitmap memeory */
+            ret_points->data_pointer[i] = (int32 *)palloc(sizeof(int32) * sky_dim);
+            (*((ret_points->point) + i))->data = &(ret_points->data_pointer[i]);                /* pass data address */
+            for (j = 0; j < sky_dim; ++j) {
+                *(*( (*((ret_points->point) + i))->data ) + j) = *(*(tmp_point->data) + j);     /* store all data information to ret_points */
+                *((*((ret_points->point) + i))->bitmap + j) = *(tmp_point->bitmap + j);         /* store all bitmap information to ret_points */
+            }
+        }
+        funcctx->user_fctx = ret_points;                                                /* store all information in ret_points to funcctx->user_fctx */
 
         /* Build a tuple descriptor for our result type */
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
@@ -533,7 +534,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
         /* MemoryContext switch to old context */
         MemoryContextSwitchTo(oldcontext);
 
-        elog(INFO, "First SRF over!!");
+        /*elog(INFO, "First SRF over!!");*/
     }
 
     /* stuff done on every call of the function */
@@ -542,16 +543,17 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     call_cntr = funcctx->call_cntr;
     max_calls = funcctx->max_calls;
     attinmeta = funcctx->attinmeta;
-    ret_point = funcctx->user_fctx;
+    ret_points = funcctx->user_fctx;
 
-    elog(INFO, "SRF begin!!");
+    /*elog(INFO, "SRF begin!!");*/
 
     if (call_cntr < max_calls) {   /* do when there is more left to send */
         char       **values;
         HeapTuple    tuple;
         Datum        result;
+        SkyPoint    *tmp_point;
 
-        elog(INFO, "SRF ~~~~!!");
+        /*elog(INFO, "SRF ~~~~!!");*/
         /*
          * Prepare a values array for building the returned tuple.
          * This should be an array of C strings which will
@@ -559,39 +561,33 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
          */
         values = (char **) palloc(sky_dim * sizeof(char *));
 
-        elog(INFO, "SRF palloc values over ~~~~!!");
+        /*elog(INFO, "SRF palloc values over ~~~~!!");*/
 
         for (i = 0; i < sky_dim; i++)
             values[i] = (char *) palloc(16 * sizeof(char));
 
-        elog(INFO, "SRF palloc each values over ~~~~!!");
+        /*elog(INFO, "SRF palloc each values over ~~~~!!");*/
 
-        elog(INFO, "This: %d", *(*(ret_point)->data));
-        elog(INFO, "This: %d", *(*(ret_point)->data + 1));
-        //elog(INFO, "Next: %d", *(*(ret_point->next)->data));
-        //elog(INFO, "Next: %d", *(*(ret_point->next)->data + 1));
+        tmp_point = (ret_points->point)[call_cntr];
 
         for (i = 0; i < sky_dim; i++) {
-            if (*(ret_point->bitmap + i) == '0')
+            if (*(tmp_point ->bitmap + i) == '0')
                 values[i] = NULL;
             else
-                snprintf(values[i], 16, "%d", *(*(ret_point->data) + i));
-            //elog(INFO, "%c ", *(ret_point->bitmap + i));
-            //elog(INFO, "%d", *(*(ret_point->data) + i));
+                snprintf(values[i], 16, "%d", *(*(tmp_point->data) + i));
         }
-        ret_point = ret_point->next;
 
-        elog(INFO, "SRF set value over ~~~~!!");
+        /*elog(INFO, "SRF set value over ~~~~!!");*/
 
         /* build a tuple */
         tuple = BuildTupleFromCStrings(attinmeta, values);
 
-        elog(INFO, "SRF buil tuple over ~~~~!!");
+        /*elog(INFO, "SRF buil tuple over ~~~~!!");*/
 
         /* make the tuple into a datum */
         result = HeapTupleGetDatum(tuple);
 
-        elog(INFO, "SRF to datum over ~~~~!!");
+        /*elog(INFO, "SRF to datum over ~~~~!!");*/
 
         SRF_RETURN_NEXT(funcctx, result);
     } else {
