@@ -42,7 +42,7 @@ int sky_k;                  /* The k value that in skyband query */
 int sky_dim;                /* The dimension of point in skyband query */
 int sky_cnt;                /* The number of the points in skyband query */
 
-int32 **tmp_pointer;
+double **tmp_pointer;
 
 int s_size;                     /* Point number in S */
 int stwh_size;                  /* Point number in Stwh */
@@ -66,7 +66,7 @@ DomiTable *domi_table;                          /* Dominate table for storing th
 
 typedef struct ret_struct {
     SkyPoint **point;
-    int32 **data_pointer;
+    double **data_pointer;
 } ret_struct;
 
 /*
@@ -83,7 +83,7 @@ typedef struct ret_struct {
  */
 
 bool IsP1DominateP2(SkyPoint *p1, SkyPoint *p2) {
-    int32 x1, x2;
+    double x1, x2;
     int i;
     int dim = p1->dim;
     int is_small = 0;                       /* Used to decide if there exist one dimension that p1 is smaller than p2 */
@@ -463,7 +463,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             TupleDesc tupdesc;
             SPITupleTable *tuptable;
             HeapTuple tuple;
-            char buf[8192];
+            /*char buf[8192];*/
 
             tupdesc = SPI_tuptable->tupdesc;
             tuptable = SPI_tuptable;
@@ -471,66 +471,66 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
             s_head = StartPoint(&s_size, &s_head, &s_tail, sky_dim);            /* Create head point of S */
 
-            tmp_pointer = (int32 **)palloc(sizeof(int32*) * sky_cnt);
+            tmp_pointer = (double **)palloc(sizeof(double *) * sky_cnt);
 
             for (i = 0; i < sky_cnt; i++) {
                 tmp_head = StartPoint(&tmp_size, &tmp_head, &tmp_tail, sky_dim);      /* Create temp input point */
-                tmp_pointer[i] = (int32 *)palloc(sizeof(int32) * sky_dim);            /* Palloc memory to input point's data */
+                tmp_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);            /* Palloc memory to input point's data */
                 tmp_head->data = &(tmp_pointer[i]);
                 tmp_head->bitmap = (char *)palloc(sizeof(char) * sky_dim);            /* Palloc memory to input point's bimap */
                 tmp_head->index = i;
 
                 tuple = tuptable->vals[i];
 
-                for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {                   /* Input point's data from tuple */
+                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                   /* Input point's data from tuple */
                     if (SPI_getvalue(tuple, tupdesc, j) == NULL)
                         *(*(tmp_head->data) + j - 1) = 0;
                     else
-                        *(*(tmp_head->data) + j - 1) = atoi(SPI_getvalue(tuple, tupdesc, j));
-                    snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                            SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
+                        *(*(tmp_head->data) + j - 1) = atof(SPI_getvalue(tuple, tupdesc, j));
+                    //snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
+                    //        SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
                 }
-                elog(INFO, "Data Info: %s", buf);
+                /*elog(INFO, "Data Info: %s", buf);*/
 
-                for (j = 1, buf[0] = 0; j <= tupdesc->natts; j++) {                     /* Input point's bitmap from tuple */
+                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                     /* Input point's bitmap from tuple */
                     bitmap = atoi((SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1");
                     if (bitmap != 1)
                         *(tmp_head->bitmap + j - 1) = '0';
                     else
                         *(tmp_head->bitmap + j - 1) = '1';
-                    snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                            (SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1", (j == tupdesc->natts) ? " " : " |");
+                    //snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
+                    //        (SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1", (j == tupdesc->natts) ? " " : " |");
                 }
-                elog(INFO, "Bitmap   : %s", buf);
+                /*elog(INFO, "Bitmap   : %s", buf);*/
 
                 PushPoint(tmp_head, &s_size, &s_tail);                          /* Push all points to S */
             }
         }
 
-        elog(INFO, "Input over!!");
+        /*elog(INFO, "Input over!!");*/
 
         SPI_finish();
         pfree(command);
 
-        elog(INFO, "SPI over!!");
+        /*elog(INFO, "SPI over!!");*/
 
         ThicknessWarehouse();
 
-        elog(INFO, "TWH over!!");
+        /*elog(INFO, "TWH over!!");*/
 
         /* total number of tuples to be returned */
         funcctx->max_calls = sg_size;
 
         /* store all output informatin to funcctx->user_fctx */
         ret_points = (ret_struct *)palloc(sizeof(ret_struct));
-        ret_points->point = (SkyPoint **)palloc(sizeof(SkyPoint*) * sg_size);           /* store points */
-        ret_points->data_pointer = (int32 **)palloc(sizeof(int32*) * sg_size);          /* store data and then can pass this address to ret_points->point->data */
+        ret_points->point = (SkyPoint **)palloc(sizeof(SkyPoint*) * sg_size);               /* store points */
+        ret_points->data_pointer = (double **)palloc(sizeof(double *) * sg_size);           /* store data and then can pass this address to ret_points->point->data */
         tmp_point = sg_head;
         for (i = 0; i < sg_size; ++i) {
             tmp_point = tmp_point->next;
             *((ret_points->point) + i) = (SkyPoint *)palloc(sizeof(SkyPoint));
             (*((ret_points->point) + i))->bitmap = (char *)palloc(sizeof(char) * sky_dim);      /* palloc bitmap memeory */
-            ret_points->data_pointer[i] = (int32 *)palloc(sizeof(int32) * sky_dim);
+            ret_points->data_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);
             (*((ret_points->point) + i))->data = &(ret_points->data_pointer[i]);                /* pass data address */
             for (j = 0; j < sky_dim; ++j) {
                 *(*( (*((ret_points->point) + i))->data ) + j) = *(*(tmp_point->data) + j);     /* store all data information to ret_points */
@@ -591,7 +591,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             if (*(tmp_point ->bitmap + i) == '0')
                 values[i] = NULL;
             else
-                snprintf(values[i], 16, "%d", *(*(tmp_point->data) + i));
+                snprintf(values[i], 16, "%f", *(*(tmp_point->data) + i));
         }
 
         /*elog(INFO, "SRF set value over ~~~~!!");*/
