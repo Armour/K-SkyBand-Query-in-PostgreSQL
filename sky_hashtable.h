@@ -27,7 +27,7 @@ typedef struct HashTable {
 } HashTable;
 
 /* Initialize hashtable with size n */
-HashTable *InitTable(int n);
+HashTable *InitHashTable(int n);
 
 /* Find the list of nodes which has the same bitmap with b (from hashtable h) */
 ListNode *Find(char *b, HashTable *h, int d);

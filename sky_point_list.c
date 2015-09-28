@@ -26,7 +26,8 @@ void InitPoint(SkyPoint *point) {
     point -> dim = 0;
     point -> data = NULL;
     point -> bitmap = NULL;
-    point -> cnt_domi = 0;             /*Count of dominated time should be zero at first */
+    point -> cnt_domi = 0;              /* Count of dominated time should be zero at first */
+    point -> index = -1;
     point -> next = NULL;
     point -> prev = NULL;
 }

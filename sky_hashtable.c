@@ -89,7 +89,7 @@ int SameBitmap(char *a, char* b, int d) {
 }
 
 /*
- * Function: InitializeTable
+ * Function: InitHashTable
  * -------------------
  *   Initialize a hashtable with size of n
  *
@@ -98,7 +98,7 @@ int SameBitmap(char *a, char* b, int d) {
  *   returns: the pointer to the new hashtable
  */
 
-HashTable* InitTable(int n) {
+HashTable* InitHashTable(int n) {
     HashTable* h;
     int i;
     h = (HashTable *)palloc(sizeof(HashTable));

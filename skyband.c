@@ -20,6 +20,7 @@
 
 #include "sky_point_list.h"
 #include "sky_bucket_list.h"
+#include "sky_domi_list.h"
 #include "sky_hashtable.h"
 
 
@@ -55,11 +56,13 @@ SkyPoint *ses_head, *ses_tail;          /* Head/tail point for Ses */
 SkyPoint *sg_head, *sg_tail;            /* Head/tail point for Sg */
 SkyPoint *tmp_head, *tmp_tail;
 
-SkyBucket *first_bucket, *last_bucket;         /* First and last bucket for all bitmap that already knows */
+SkyBucket *first_bucket, *last_bucket;          /* First and last bucket for all bitmap that already knows */
 SkyBucket *tmp_bucket;
 
-HashTable *h;                           /* Hashtable for skyband query */
+HashTable *hash_table;                          /* Hashtable for skyband query */
 ListNode *tmp_listnode;
+
+DomiTable *domi_table;                          /* Dominate table for storing the index of doninated points */
 
 typedef struct ret_struct {
     SkyPoint **point;
@@ -94,7 +97,7 @@ bool IsP1DominateP2(SkyPoint *p1, SkyPoint *p2) {
         is_null_x2 = (*(p2->bitmap + i)) == '0';
         if (is_null_x1 || is_null_x2) {         /* If p1 or p2's bitmap is '0', which means incomplete data */
             cnt_small_or_equal++;
-        } else {                            /* Else just do comparation */
+        } else {                                /* Else just do comparation */
             if (x1 <= x2) cnt_small_or_equal++;
             if (x1 < x2) is_small = 1;
         }
@@ -200,7 +203,7 @@ void ThicknessWarehouse(void) {
     //////////////////////////////////////////////////////////////////////////
 
     /* Create hashtable */
-    h = InitTable(sky_cnt);
+    hash_table = InitHashTable(sky_cnt);
 
     /* Push every point in S to a bucket depends on its bitmap */
     first_bucket = NULL;
@@ -209,11 +212,11 @@ void ThicknessWarehouse(void) {
     while (tmp_next != NULL) {
         tmp_point = tmp_next;
         tmp_next = tmp_point->next;
-        tmp_listnode = Find(tmp_point->bitmap, h, sky_dim);             /* Find the list of nodes in hashtable according to bimap */
+        tmp_listnode = Find(tmp_point->bitmap, hash_table, sky_dim);             /* Find the list of nodes in hashtable according to bimap */
         if (tmp_listnode == NULL) {
             tmp_bucket = (SkyBucket *)palloc(sizeof(SkyBucket));        /* If not exist, then we create a node for this bitmap in hashtable */
             InitBucket(tmp_bucket, sky_dim);
-            Insert(tmp_point->bitmap, h, sky_dim, tmp_bucket, &first_bucket, &last_bucket);
+            Insert(tmp_point->bitmap, hash_table, sky_dim, tmp_bucket, &first_bucket, &last_bucket);
         } else {
             tmp_bucket = tmp_listnode->bucket;                          /* Get the bucket of this bitmap */
         }
@@ -244,6 +247,7 @@ void ThicknessWarehouse(void) {
                     tmp_point2 = tmp_array[j];
                     if (IsP1DominateP2(tmp_point2, tmp_point)) {                /* If point A dominate point B */
                         tmp_point->cnt_domi++;                                  /* Add cnt_domi of B */
+                        AddDomiPair(domi_table, tmp_point->index, tmp_point2->index);       /* Add pair to dominate table */
                         if (tmp_point->cnt_domi>= sky_k) {                      /* If cnt_domi of B is larger than sky_k, we put B into Sln */
                             PushPoint(tmp_point, &tmp_bucket->sln_size, &tmp_bucket->sln_tail);
                             break;
@@ -251,12 +255,12 @@ void ThicknessWarehouse(void) {
                     }
                 }
             }
-            if (j == tmp_bucket->data_size)             /* which means data[j] is not dominted more than k times, then put it into Sl */
+            if (j == tmp_bucket->data_size)                 /* which means data[j] is not dominted more than k times, then put it into Sl */
                 PushPoint(tmp_point, &stwh_size, &stwh_tail);
         }
         tmp_bucket = tmp_bucket->next;
-        /* Free the memory alloc of tmp_array */
-        pfree(tmp_array);
+
+        pfree(tmp_array);                                   /* Free the memory of tmp_array */
     }
 
     //////////////////////////////////////////////////////////////////////////
@@ -285,10 +289,16 @@ void ThicknessWarehouse(void) {
         while (iter_b != stwh_head) {                                               /* Iter_b starts from stwh_tali to stwh_head */
             cnt_b++;
             tmp_point = iter_b->prev;
-            if (SameBitmap(iter_a->bitmap, iter_b->bitmap, sky_dim))                /* If converge at same bitmap, then break */
-                break;
+            if (iter_a->index == iter_b->index) {                                   /* If converge at same index, then break */
+                 break;
+            }
+            if (SameBitmap(iter_a->bitmap, iter_b->bitmap, sky_dim)) {              /* If in the same bitmap, then continue */
+                iter_b = tmp_point;
+                continue;
+            }
             if (IsP1DominateP2(iter_b, iter_a)) {
                 iter_a->cnt_domi++;
+                AddDomiPair(domi_table, iter_a->index, iter_b->index);              /* Add pair to dominate table */
                 if (iter_a->cnt_domi >= sky_k) {
                     DeletePoint(cnt_a, &stwh_size, &stwh_head, &stwh_tail);
                     PushPoint(iter_a, &ses_size, &ses_tail);
@@ -298,6 +308,7 @@ void ThicknessWarehouse(void) {
             }
             if (IsP1DominateP2(iter_a, iter_b)) {
                 iter_b->cnt_domi++;
+                AddDomiPair(domi_table, iter_a->index, iter_b->index);              /* Add pair to dominate table */
                 if (iter_b->cnt_domi >= sky_k) {
                     if (tmp_next == iter_b)                 /* If two nearby nodes, we delete the second, then update first node's next */
                         tmp_next = iter_b->next;
@@ -327,8 +338,9 @@ void ThicknessWarehouse(void) {
         tmp_next = iter_a->next;
         iter_b = ses_head->next;
         while (iter_b != NULL) {
-            if (IsP1DominateP2(iter_b, iter_a)) {
+            if (IsP1DominateP2(iter_b, iter_a) && !IsDomiPairExist(domi_table, iter_a->index, iter_b->index)) {
                 iter_a->cnt_domi++;
+                AddDomiPair(domi_table, iter_a->index, iter_b->index);              /* Add pair to dominate table */
                 if (iter_a->cnt_domi >= sky_k) {
                     DeletePoint(cnt_a, &stwh_size, &stwh_head, &stwh_tail);
                     cnt_a--;
@@ -352,6 +364,7 @@ void ThicknessWarehouse(void) {
             while (iter_b != NULL) {
                 if (IsP1DominateP2(iter_b, iter_a)) {
                     iter_a->cnt_domi++;
+                    AddDomiPair(domi_table, iter_a->index, iter_b->index);              /* Add pair to dominate table */
                     if (iter_a->cnt_domi >= sky_k) {
                         DeletePoint(cnt_a, &stwh_size, &stwh_head, &stwh_tail);
                         cnt_a--;
@@ -442,6 +455,9 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
         /* save the number of rows */
         sky_cnt = SPI_processed;
 
+        /* Initailize dominate lists */
+        domi_table = InitDomiTable(sky_cnt);
+
         /* If some rows were fetched, print them via elog(INFO). */
         if (ret > 0 && SPI_tuptable != NULL) {
             TupleDesc tupdesc;
@@ -462,6 +478,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
                 tmp_pointer[i] = (int32 *)palloc(sizeof(int32) * sky_dim);            /* Palloc memory to input point's data */
                 tmp_head->data = &(tmp_pointer[i]);
                 tmp_head->bitmap = (char *)palloc(sizeof(char) * sky_dim);            /* Palloc memory to input point's bimap */
+                tmp_head->index = i;
 
                 tuple = tuptable->vals[i];
 

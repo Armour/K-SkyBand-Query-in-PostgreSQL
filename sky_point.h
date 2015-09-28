@@ -20,6 +20,7 @@ typedef struct SkyPoint {
     int32 **data;               /* Stored data of this point */
     char *bitmap;               /* Bitmap of this point */
     int cnt_domi;               /* The dominated count of this point */
+    int index;                  /* The index of this point */
     struct SkyPoint *next;
     struct SkyPoint *prev;      /* Stored as a list */
 } SkyPoint;
