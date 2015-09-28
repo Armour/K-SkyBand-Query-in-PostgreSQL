@@ -1,6 +1,6 @@
 /*-------------------------------------------------
  *
- *  sky_query.h
+ *  skyband.c
  *  KeySkyBandQuery
  *
  *  Created by Armour on 7/10/15.

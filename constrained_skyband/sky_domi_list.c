@@ -1,6 +1,6 @@
 /*-------------------------------------------------
  *
- *  sky_domi_lit.c
+ *  sky_domi_list.c
  *  KSkyBandQuery
  *
  *  Created by Armour on 9/26/15.
