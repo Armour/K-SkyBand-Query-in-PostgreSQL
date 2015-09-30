@@ -41,7 +41,6 @@ void Init(void);
 int sky_k;                  /* The k value that in skyband query */
 int sky_dim;                /* The dimension of point in skyband query */
 int sky_cnt;                /* The number of the points in skyband query */
-int total_dim;              /* The total dimension of the input data */
 
 double **tmp_pointer;
 
@@ -465,7 +464,6 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             HeapTuple tuple;
             int cnt_dim = 0;
             char *type_name;
-            /*char buf[8192];*/
 
             tupdesc = SPI_tuptable->tupdesc;
             tuptable = SPI_tuptable;
@@ -475,13 +473,12 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
                 type_name = SPI_gettype(tupdesc, i);
                 if (strcmp(type_name, "int4") == 0 || strcmp(type_name, "int2") == 0 ||
                     strcmp(type_name, "float4") == 0 || strcmp(type_name, "float8") == 0) {
-                    elog(INFO, "Type: %s", type_name);
+                    //elog(INFO, "Type: %s", type_name);
                     cnt_dim++;
                 }
             }
 
             sky_dim = cnt_dim;                                                  /* dimension */
-            total_dim = tupdesc->natts;
 
             s_head = StartPoint(&s_size, &s_head, &s_tail, sky_dim);            /* Create head point of S */
 
@@ -496,7 +493,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
                 tuple = tuptable->vals[i];
 
-                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                     /* Input point's data from tuple */
+                for (j = 1; j <= tupdesc->natts; j++) {                     /* Input point's data from tuple */
                     type_name = SPI_gettype(tupdesc, j);
                     if (strcmp(type_name, "int4") == 0 || strcmp(type_name, "int2") == 0 ||
                         strcmp(type_name, "float4") == 0 || strcmp(type_name, "float8") == 0) {
@@ -508,8 +505,6 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
                             *(tmp_head->bitmap + j - 1) = '1';
                         }
                     }
-                    //snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                    //        SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
                 }
                 /*elog(INFO, "Data Info: %s", buf);*/
 
@@ -519,7 +514,6 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
         /*elog(INFO, "Input over!!");*/
 
-        SPI_finish();
         pfree(command);
 
         /*elog(INFO, "SPI over!!");*/
@@ -542,6 +536,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             (*((ret_points->point) + i))->bitmap = (char *)palloc(sizeof(char) * sky_dim);      /* palloc bitmap memeory */
             ret_points->data_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);
             (*((ret_points->point) + i))->data = &(ret_points->data_pointer[i]);                /* pass data address */
+            (*((ret_points->point) + i))->index = tmp_point->index;
             for (j = 0; j < sky_dim; ++j) {
                 *(*( (*((ret_points->point) + i))->data ) + j) = *(*(tmp_point->data) + j);     /* store all data information to ret_points */
                 *((*((ret_points->point) + i))->bitmap + j) = *(tmp_point->bitmap + j);         /* store all bitmap information to ret_points */
@@ -577,48 +572,46 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     if (call_cntr < max_calls) {   /* do when there is more left to send */
         char       **values;
         HeapTuple    tuple;
+        HeapTuple    ret_tuple;
         Datum        result;
         SkyPoint    *tmp_point;
+        TupleDesc   tupdesc;
+        SPITupleTable *tuptable;
 
-        /*elog(INFO, "SRF ~~~~!!");*/
+        tupdesc = SPI_tuptable->tupdesc;
+        tuptable = SPI_tuptable;
+
         /*
          * Prepare a values array for building the returned tuple.
          * This should be an array of C strings which will
          * be processed later by the type input functions.
          */
-        values = (char **) palloc(sky_dim * sizeof(char *));
+        values = (char **) palloc(tupdesc->natts * sizeof(char *));
 
         /*elog(INFO, "SRF palloc values over ~~~~!!");*/
 
-        for (i = 0; i < sky_dim; i++)
-            values[i] = (char *) palloc(16 * sizeof(char));
-
-        /*elog(INFO, "SRF palloc each values over ~~~~!!");*/
-
+        /* get return tuple value from index */
         tmp_point = (ret_points->point)[call_cntr];
-
-        for (i = 0; i < sky_dim; i++) {
-            if (*(tmp_point ->bitmap + i) == '0')
-                values[i] = NULL;
-            else
-                snprintf(values[i], 16, "%f", *(*(tmp_point->data) + i));
+        for (i = 0; i < tupdesc->natts; i++) {
+            tuple = tuptable->vals[tmp_point->index];
+            values[i] = (SPI_getvalue(tuple, tupdesc, i + 1));
         }
 
-        /*elog(INFO, "SRF set value over ~~~~!!");*/
+        /*elog(INFO, "SRF get value done ~~~~!!");*/
 
         /* build a tuple */
-        tuple = BuildTupleFromCStrings(attinmeta, values);
+        ret_tuple = BuildTupleFromCStrings(attinmeta, values);
 
         /*elog(INFO, "SRF buil tuple over ~~~~!!");*/
 
         /* make the tuple into a datum */
-        result = HeapTupleGetDatum(tuple);
+        result = HeapTupleGetDatum(ret_tuple);
 
         /*elog(INFO, "SRF to datum over ~~~~!!");*/
 
         SRF_RETURN_NEXT(funcctx, result);
     } else {
+        SPI_finish();
         SRF_RETURN_DONE(funcctx);    // if all printed
     }
-
 }
