@@ -41,6 +41,7 @@ void Init(void);
 int sky_k;                  /* The k value that in skyband query */
 int sky_dim;                /* The dimension of point in skyband query */
 int sky_cnt;                /* The number of the points in skyband query */
+int total_dim;              /* The total dimension of the input data */
 
 double **tmp_pointer;
 
@@ -415,7 +416,6 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
     char *command;
     int ret;
     int i, j;
-    int bitmap;
     int call_cntr;
     int max_calls;
     SkyPoint *tmp_point;
@@ -463,11 +463,25 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             TupleDesc tupdesc;
             SPITupleTable *tuptable;
             HeapTuple tuple;
+            int cnt_dim = 0;
+            char *type_name;
             /*char buf[8192];*/
 
             tupdesc = SPI_tuptable->tupdesc;
             tuptable = SPI_tuptable;
-            sky_dim = tupdesc->natts;                                           /* dimension */
+
+            /* get the number of datatype that can be used in skyband query */
+            for (i = 1; i <= tupdesc->natts; ++i) {
+                type_name = SPI_gettype(tupdesc, i);
+                if (strcmp(type_name, "int4") == 0 || strcmp(type_name, "int2") == 0 ||
+                    strcmp(type_name, "float4") == 0 || strcmp(type_name, "float8") == 0) {
+                    elog(INFO, "Type: %s", type_name);
+                    cnt_dim++;
+                }
+            }
+
+            sky_dim = cnt_dim;                                                  /* dimension */
+            total_dim = tupdesc->natts;
 
             s_head = StartPoint(&s_size, &s_head, &s_tail, sky_dim);            /* Create head point of S */
 
@@ -475,33 +489,29 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
 
             for (i = 0; i < sky_cnt; i++) {
                 tmp_head = StartPoint(&tmp_size, &tmp_head, &tmp_tail, sky_dim);      /* Create temp input point */
-                tmp_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);            /* Palloc memory to input point's data */
+                tmp_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);          /* Palloc memory to input point's data */
                 tmp_head->data = &(tmp_pointer[i]);
                 tmp_head->bitmap = (char *)palloc(sizeof(char) * sky_dim);            /* Palloc memory to input point's bimap */
                 tmp_head->index = i;
 
                 tuple = tuptable->vals[i];
 
-                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                   /* Input point's data from tuple */
-                    if (SPI_getvalue(tuple, tupdesc, j) == NULL)
-                        *(*(tmp_head->data) + j - 1) = 0;
-                    else
-                        *(*(tmp_head->data) + j - 1) = atof(SPI_getvalue(tuple, tupdesc, j));
+                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                     /* Input point's data from tuple */
+                    type_name = SPI_gettype(tupdesc, j);
+                    if (strcmp(type_name, "int4") == 0 || strcmp(type_name, "int2") == 0 ||
+                        strcmp(type_name, "float4") == 0 || strcmp(type_name, "float8") == 0) {
+                        if (SPI_getvalue(tuple, tupdesc, j) == NULL) {                      /* If data is NULL */
+                            *(*(tmp_head->data) + j - 1) = 0;
+                            *(tmp_head->bitmap + j - 1) = '0';
+                        } else {                                                            /* If data is not NULL */
+                            *(*(tmp_head->data) + j - 1) = atof(SPI_getvalue(tuple, tupdesc, j));
+                            *(tmp_head->bitmap + j - 1) = '1';
+                        }
+                    }
                     //snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
                     //        SPI_getvalue(tuple, tupdesc, j), (j == tupdesc->natts) ? " " : " |");
                 }
                 /*elog(INFO, "Data Info: %s", buf);*/
-
-                for (j = 1/*, buf[0] = 0*/; j <= tupdesc->natts; j++) {                     /* Input point's bitmap from tuple */
-                    bitmap = atoi((SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1");
-                    if (bitmap != 1)
-                        *(tmp_head->bitmap + j - 1) = '0';
-                    else
-                        *(tmp_head->bitmap + j - 1) = '1';
-                    //snprintf(buf + strlen (buf), sizeof(buf) - strlen(buf), " %s%s",
-                    //        (SPI_getvalue(tuple, tupdesc, j) == NULL) ? "0" : "1", (j == tupdesc->natts) ? " " : " |");
-                }
-                /*elog(INFO, "Bitmap   : %s", buf);*/
 
                 PushPoint(tmp_head, &s_size, &s_tail);                          /* Push all points to S */
             }

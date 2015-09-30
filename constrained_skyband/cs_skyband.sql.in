@@ -1,4 +1,0 @@
-CREATE OR REPLACE FUNCTION cs_skyband(text, int)
-    RETURNS SETOF record
-    AS 'MODULE_PATHNAME', 'ConstrainedSkybandQuery'
-    LANGUAGE C STRICT;

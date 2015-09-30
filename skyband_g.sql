@@ -1,0 +1,54 @@
+CREATE OR REPLACE FUNCTION skyband_g(input_selection text, tablename text, attri text, k int, output_format text) RETURNS SETOF record
+AS $$
+DECLARE
+    class record;   -- Used for group by
+    tmp record;     -- Used for return records
+BEGIN
+    IF k IS NULL
+    THEN
+        k = 1;
+    END IF;
+
+    If input_selection Is NULL
+    THEN
+        input_selection = '*';
+    END IF;
+
+    IF tablename IS NULL
+    THEN
+        RAISE 'Table name can not be NULL!';
+    END IF;
+
+    IF attri IS NULL
+    THEN
+        -- If we do not need group by
+        FOR tmp IN EXECUTE format('SELECT * FROM skyband(''SELECT %s FROM %s'', %s) as (%s);', input_selection, tablename, k::text, output_format)
+        LOOP
+            RETURN NEXT tmp;
+        END LOOP;
+    ELSE
+        --  get the different classes of attri using group by
+        FOR class IN EXECUTE format('SELECT %s FROM %s GROUP BY %s;', attri, tablename, attri)
+        LOOP
+            IF class IS NULL
+            THEN
+                -- If it is NULL
+                FOR tmp IN EXECUTE format('SELECT * FROM skyband(''SELECT %s FROM %s WHERE %s IS NULL'', %s) as (%s);',
+                            input_selection, tablename, attri, k::text, output_format)
+                LOOP
+                    RETURN NEXT tmp;
+                END LOOP;
+            ELSE
+                -- If it is not NULL
+                FOR tmp IN EXECUTE format('SELECT * FROM skyband(''SELECT %s FROM %s WHERE %s = %s'', %s) as (%s);',
+                            input_selection, tablename, attri, class, k::text, output_format)
+                LOOP
+                    RETURN NEXT tmp;
+                END LOOP;
+            END IF;
+        END LOOP;
+    END IF;
+
+    RETURN;
+END
+$$ language plpgsql;
