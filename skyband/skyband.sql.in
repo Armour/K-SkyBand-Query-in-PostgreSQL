@@ -2,10 +2,6 @@
 CREATE OR REPLACE FUNCTION skyband(text, int) RETURNS SETOF record
 AS 'MODULE_PATHNAME', 'SkybandQuery' LANGUAGE C STRICT;
 
--- Create skyline function
-CREATE OR REPLACE FUNCTION skyline(text) RETURNS SETOF record
-AS 'MODULE_PATHNAME', 'SkybandQuery' LANGUAGE C STRICT;
-
 -- Create skyband extension function
 CREATE OR REPLACE FUNCTION skyband_ext(input_selection text, tablename text, attri text, k int, output_format text) RETURNS SETOF record
 AS $$

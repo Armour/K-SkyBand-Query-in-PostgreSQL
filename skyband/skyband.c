@@ -223,6 +223,7 @@ void ThicknessWarehouse(void) {
         PushPoint(tmp_point, &tmp_bucket->data_size, &tmp_bucket->data_tail);       /* Push point into the bucket of this bitmap */
     }
 
+
     //////////////////////////////////////////////////////////////////////////
     //                                                                      //
     // [STEP 2]                                                             //
@@ -235,7 +236,6 @@ void ThicknessWarehouse(void) {
     while (tmp_bucket != NULL) {
         tmp_array = (SkyPoint **)palloc(sizeof(SkyPoint*) * tmp_bucket->data_size);
         tmp_point = tmp_bucket->data_head;
-        tmp_array[0] = tmp_point;
         for (i = 0; i < tmp_bucket->data_size; i++) {                           /* Put points in list into array */
             tmp_point = tmp_point->next;
             tmp_array[i] = tmp_point;
@@ -308,7 +308,7 @@ void ThicknessWarehouse(void) {
             }
             if (IsP1DominateP2(iter_a, iter_b)) {
                 iter_b->cnt_domi++;
-                AddDomiPair(domi_table, iter_a->index, iter_b->index);              /* Add pair to dominate table */
+                AddDomiPair(domi_table, iter_b->index, iter_a->index);              /* Add pair to dominate table */
                 if (iter_b->cnt_domi >= sky_k) {
                     if (tmp_next == iter_b)                 /* If two nearby nodes, we delete the second, then update first node's next */
                         tmp_next = iter_b->next;
@@ -444,6 +444,8 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
         } else {
             sky_k = 1;
         }
+        if (sky_k < 1)
+            sky_k = 1;
 
         /* open internal connection */
         SPI_connect();
@@ -485,6 +487,7 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
             tmp_pointer = (double **)palloc(sizeof(double *) * sky_cnt);
 
             for (i = 0; i < sky_cnt; i++) {
+                int cnt_dim = 0;
                 tmp_head = StartPoint(&tmp_size, &tmp_head, &tmp_tail, sky_dim);      /* Create temp input point */
                 tmp_pointer[i] = (double *)palloc(sizeof(double) * sky_dim);          /* Palloc memory to input point's data */
                 tmp_head->data = &(tmp_pointer[i]);
@@ -498,12 +501,13 @@ Datum SkybandQuery(PG_FUNCTION_ARGS) {
                     if (strcmp(type_name, "int4") == 0 || strcmp(type_name, "int2") == 0 ||
                         strcmp(type_name, "float4") == 0 || strcmp(type_name, "float8") == 0) {
                         if (SPI_getvalue(tuple, tupdesc, j) == NULL) {                      /* If data is NULL */
-                            *(*(tmp_head->data) + j - 1) = 0;
-                            *(tmp_head->bitmap + j - 1) = '0';
+                            *(*(tmp_head->data) + cnt_dim) = 0;
+                            *(tmp_head->bitmap + cnt_dim) = '0';
                         } else {                                                            /* If data is not NULL */
-                            *(*(tmp_head->data) + j - 1) = atof(SPI_getvalue(tuple, tupdesc, j));
-                            *(tmp_head->bitmap + j - 1) = '1';
+                            *(*(tmp_head->data) + cnt_dim) = atof(SPI_getvalue(tuple, tupdesc, j));
+                            *(tmp_head->bitmap + cnt_dim) = '1';
                         }
+                        cnt_dim++;
                     }
                 }
                 /*elog(INFO, "Data Info: %s", buf);*/
