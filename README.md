@@ -170,5 +170,5 @@ Note that skyband_ext functin takes 5 parameters:
 
 ## Contact us
 1. If you have any question about this paper, you can contact Mr. Gao: gaoyj@zju.edu.cn
-2. The projet is coded by Armour Guo, feel free to ask any questions: gc497052684@gmail.com
+2. The projet is coded by Armour Guo, feel free to ask any questions: armourcy@gmail.com
 
