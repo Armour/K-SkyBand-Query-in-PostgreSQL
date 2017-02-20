@@ -3,7 +3,7 @@ incomplete k-skyband, constrained skyline, and group-by skyline queries on incom
 
 ## Algorithm Discription
 ### kISB algorithm:
-* Please see Mr. Gao's paper: [Processing k-skyband, constrained skyline, and group-by skyline queries on incomplete data] (http://www.armourcy.com/skyband.pdf)
+* Please see Dr. Gao's paper: [Processing k-skyband, constrained skyline, and group-by skyline queries on incomplete data] (http://www.armourcy.com/skyband.pdf)
 
 ## Testing Environment
   * Operation System: Mac OSX / Ubuntu 14.04
@@ -39,14 +39,14 @@ for mac:
     sudo make install
 ~~~
 
-in terminal you will see a contrib path in output like this:
+in terminal you will see a path in the output like this:
 "/usr/local/Cellar/postgresql/9.4.4/share/postgresql/contrib"
 
 ### 3. Import skyband function (in postgresql)
 
-1. Login in postgre with the database that you want to add function to
+1. Login postgre with the database that you want to add function to
 
-  (if you want to add function to **all** database, then you should login in **template1** database,
+  (if you want to add function to **all** databases, you should login **template1** database,
 google it for more details.)
 
 2. Use postgresql command to import function like below
@@ -57,7 +57,7 @@ google it for more details.)
     \i [/usr/local/Cellar/postgresql/9.4.4/share/postgresql/contrib/]skyband.sql
 ~~~
 
-3. You will see two "CREATE FUNCTION" outputed if nothong wrong
+3. You will see two "CREATE FUNCTION" if everything works
 
 ### 4. Performing skyband query with warehouse algorithem
 if we have such a table:
@@ -79,7 +79,7 @@ postgres=> select * from hotel;
 (10 rows)
 ~~~
 
-then we can run command like below using skyband function:
+we can run command like below using skyband function:
 
 ~~~sql
 -- skyline query (k = 1)
@@ -113,10 +113,10 @@ Note that skyband function needs two parameters:
 1. the selection clause, can not be NULL (text)
 2. k (integer)
 
-(ps: you should also provide the output format using as clause, otherwise it won't work).
+(ps: you should also provide the output format using `as` clause, otherwise it won't work).
 
 
-There is another function call skyand_ext which is more powerfull and can use to solve group by skyband query.
+There is another function call `skyand_ext` which is more powerfull and can use to solve group by skyband query.
 
 ~~~sql
 -- skyline query (k = 1)
@@ -156,7 +156,7 @@ postgres=> select * from skyband_ext('name, price, distance, noisy, star', 'hote
 
 ~~~
 
-Note that skyband_ext functin takes 5 parameters:
+Note that `skyband_ext` functin takes 5 parameters:
 
 1. the fields that you want to use, can not be NULL (text)
 2. the name of the table, can not be NULL (text)
@@ -166,9 +166,8 @@ Note that skyband_ext functin takes 5 parameters:
 
 (ps: you should also provide the outer output format using as clause, otherwise it won't work).
 
-(pps: here the inner output format actully is redundent, but I'm still not found a good way to hide it, in most cases, you can fill both inner and outer format with the original names and types in your table)
+(pps: here the inner output format is actully redundent, but I still didn't find a good way to hide it. In most cases, you can fill both inner and outer formats with the original names and types in your table)
 
 ## Contact us
-1. If you have any question about this paper, you can contact Mr. Gao: gaoyj@zju.edu.cn
-2. The projet is coded by Armour Guo, feel free to ask any questions: armourcy@gmail.com
-
+1. If you have any question about this paper, you can contact Dr. Gao: gaoyj@zju.edu.cn
+2. The projet is implemented by Armour Guo, feel free to ask any questions: armourcy@gmail.com
