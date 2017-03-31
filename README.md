@@ -1,5 +1,5 @@
 # K-SkyBand-Query-in-PostgreSQL
-incomplete k-skyband, constrained skyline, and group-by skyline queries on incomplete data in postgresql
+Incomplete k-skyband, constrained skyline, and group-by skyline queries on incomplete data in postgresql
 
 ## Algorithm Discription
 ### kISB algorithm:
@@ -39,7 +39,7 @@ for mac:
     sudo make install
 ~~~
 
-in terminal you will see a path in the output like this:
+In terminal you will see a path in the output like this:
 "/usr/local/Cellar/postgresql/9.4.4/share/postgresql/contrib"
 
 ### 3. Import skyband function (in postgresql)
@@ -59,8 +59,8 @@ google it for more details.)
 
 3. You will see two "CREATE FUNCTION" if everything works
 
-### 4. Performing skyband query with warehouse algorithem
-if we have such a table:
+### 4. Performing skyband query with warehouse algorithm
+If we have such a table:
 ~~~sql
 postgres=> select * from hotel;
 
@@ -79,7 +79,7 @@ postgres=> select * from hotel;
 (10 rows)
 ~~~
 
-we can run command like below using skyband function:
+We can run command like below using skyband function:
 
 ~~~sql
 -- skyline query (k = 1)
@@ -110,13 +110,13 @@ postgres=> select * from skyband('select name, price, distance, noisy from hotel
 
 Note that skyband function needs two parameters:
 
-1. the selection clause, can not be NULL (text)
-2. k (integer)
+1. The selection clause, can not be NULL (text)
+2. Integer k
 
 (ps: you should also provide the output format using `as` clause, otherwise it won't work).
 
 
-There is another function call `skyand_ext` which is more powerfull and can use to solve group by skyband query.
+There is another function call `skyand_ext` which is more powerfull and can solve group by skyband query.
 
 ~~~sql
 -- skyline query (k = 1)
@@ -158,11 +158,11 @@ postgres=> select * from skyband_ext('name, price, distance, noisy, star', 'hote
 
 Note that `skyband_ext` functin takes 5 parameters:
 
-1. the fields that you want to use, can not be NULL (text)
-2. the name of the table, can not be NULL (text)
-3. the attribute that you want to use as groupby standard, can be NULL (text)
-4. k (integer)
-5. inner output format, can not be NULL and must match the number of fields in parameter 1. (text)
+1. The fields that you want to use, can not be NULL (text)
+2. The name of the table, can not be NULL (text)
+3. The attribute that you want to use as groupby standard, can be NULL (text)
+4. Integer k
+5. Inner output format, can not be NULL and must match the number of fields in parameter 1. (text)
 
 (ps: you should also provide the outer output format using as clause, otherwise it won't work).
 
@@ -170,4 +170,4 @@ Note that `skyband_ext` functin takes 5 parameters:
 
 ## Contact us
 1. If you have any question about this paper, you can contact Dr. Gao: gaoyj@zju.edu.cn
-2. The projet is implemented by Armour Guo, feel free to ask any questions: armourcy@gmail.com
+2. The projet is implemented by Armour Guo. Feel free to ask any questions: armourcy@gmail.com
