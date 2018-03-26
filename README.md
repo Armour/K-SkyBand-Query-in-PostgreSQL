@@ -10,7 +10,7 @@ Incomplete k-skyband, constrained skyline, and group-by skyline queries on incom
   * PostgreSQL version: PostgreSQL 9.4.4
 
 ## How to use?
-### 0. Install postgre environment fist
+### 0. Install PostgreSQL environment fist
 
 for ubuntu:
 
@@ -26,7 +26,7 @@ for mac:
     brew install postgresql
 ~~~
 
-### 1. Clone and enter my repo (in terminal)
+### 1. Clone and enter my repository (in terminal)
 ~~~terminal
     git clone git@github.com:Armour/K-SkyBand-Query-in-PostgreSQL.git
     cd K-SkyBand-Query-in-PostgreSQL
@@ -42,14 +42,14 @@ for mac:
 In terminal you will see a path in the output like this:
 "/usr/local/Cellar/postgresql/9.4.4/share/postgresql/contrib"
 
-### 3. Import skyband function (in postgresql)
+### 3. Import skyband function (in PostgreSQL)
 
-1. Login postgre with the database that you want to add function to
+1. Log in the postgres database where the skyline function will be added 
 
-  (if you want to add function to **all** databases, you should login **template1** database,
-google it for more details.)
+  (if you want to add the function to **all** databases, you should log in **template1** database.
+Google it for more details.)
 
-2. Use postgresql command to import function like below
+2. Use postgresql command to import function: 
 
   (remember to replace content in '[]' with the path that you got in step 2.)
 
@@ -79,7 +79,7 @@ postgres=> select * from hotel;
 (10 rows)
 ~~~
 
-We can run command like below using skyband function:
+The following command can be performed using skyband function:
 
 ~~~sql
 -- skyline query (k = 1)
@@ -116,7 +116,7 @@ Note that skyband function needs two parameters:
 (ps: you should also provide the output format using `as` clause, otherwise it won't work).
 
 
-There is another function call `skyand_ext` which is more powerfull and can solve group by skyband query.
+There is another function call `skyand_ext` which is more powerfull and can solve group-by skyband query.
 
 ~~~sql
 -- skyline query (k = 1)
@@ -158,11 +158,11 @@ postgres=> select * from skyband_ext('name, price, distance, noisy, star', 'hote
 
 Note that `skyband_ext` functin takes 5 parameters:
 
-1. The fields that you want to use, can not be NULL (text)
-2. The name of the table, can not be NULL (text)
-3. The attribute that you want to use as groupby standard, can be NULL (text)
-4. Integer k
-5. Inner output format, can not be NULL and must match the number of fields in parameter 1. (text)
+1. The **fields** can not be NULL (text)
+2. The **name of the table** can not be NULL (text)
+3. The **attribute**, used as group-by standard, can be NULL (text)
+4. Integer **k**
+5. **Inner output format** can not be NULL and must match the number of **fields** in 1. (text)
 
 (ps: you should also provide the outer output format using as clause, otherwise it won't work).
 
